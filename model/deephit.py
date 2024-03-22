@@ -44,7 +44,7 @@ class DeepHitTorch(nn.Module):
 
         self.layers = layers
         self.splits = splits
-        self.survival = nn.Sequential(*create_nn(inputdim, layers + [len(splits)])[:-1])
+        self.survival = nn.Sequential(*create_nn(inputdim, layers + [len(splits) + 1])[:-1])
 
     def forward(self, x, labels = None):
         return {'logits': self.survival(x)}

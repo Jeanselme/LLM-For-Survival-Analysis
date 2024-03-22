@@ -10,7 +10,7 @@ class DeepHitTrainer(Trainer):
         super().__init__(model, args, data_collator = data_collator, train_dataset = train_dataset, eval_dataset = eval_dataset, tokenizer = tokenizer, model_init = model_init)
         (e, t) = train_dataset.labels
         self.max = t.max()
-        self.splits = self.model.splits + [self.max] # Add inifinty as the last bucket
+        self.splits = torch.tensor(self.model.splits + [self.max]) # Add inifinty as the last bucket
 
     def discretise(self, t):
         return torch.bucketize(torch.clamp(t, 0, self.max), self.splits)
@@ -27,14 +27,16 @@ class DeepHitTrainer(Trainer):
         outputs = model(**inputs)
 
         # Apply softmax to use BERT Multi Class
-        logits = torch.softmax(outputs.get('logits').view(-1, len(self.splits)), dim = 1)
+        logits = torch.softmax(outputs.get('logits'), dim = 1)
 
         # Uncensored
-        loss = torch.sum(torch.log(logits[e == 1][:, t[e == 1]] + 1e-10)) # Instanteneous risk
+        index = torch.arange((e == 1).sum()) # Index to subselect the right dimension
+        loss = torch.sum(torch.log(logits[e == 1][index, t[e == 1]] + 1e-10)) # Instanteneous risk
 
         # Censored loss
         cifs = logits[e == 0].cumsum(dim = 1) # Cumulative incidence functions
-        loss += torch.sum(torch.log(1 - cifs[:, t[e == 0]] + 1e-10))
+        index = torch.arange((e == 0).sum()) 
+        loss += torch.sum(torch.log(1 - cifs[index, t[e == 0]] + 1e-10))
 
         # Average
         loss = - loss / len(t)
@@ -43,4 +45,4 @@ class DeepHitTrainer(Trainer):
     
     def predict(self, data):
         output = super().predict(data)
-        return torch.softmax(torch.tensor(output.predictions), dim = 1).detach().numpy().cumsum(1)
+        return torch.softmax(torch.tensor(output.predictions), dim = 1).detach().numpy().cumsum(1)[:, :-1] # Remove infinity
