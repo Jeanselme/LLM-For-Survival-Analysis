@@ -10,9 +10,9 @@ class DeepHitTrainer(Trainer):
         super().__init__(model, args, data_collator = data_collator, train_dataset = train_dataset, eval_dataset = eval_dataset, tokenizer = tokenizer, model_init = model_init)
         (e, t) = train_dataset.labels
         self.max = t.max()
-        self.splits = torch.linspace(0, self.max, len(self.model.splits))
+        self.splits = self.model.splits + [self.max] # Add inifinty as the last bucket
 
-    def binarise(self, t):
+    def discretise(self, t):
         return torch.bucketize(torch.clamp(t, 0, self.max), self.splits)
  
     def compute_loss(self, model, inputs, return_outputs = False):
@@ -22,12 +22,12 @@ class DeepHitTrainer(Trainer):
         # Get labels
         labels = inputs.pop("labels")
         e, t = labels[:, 0], labels[:, 1]
-        t = self.binarise(t)
+        t = self.discretise(t)
 
         outputs = model(**inputs)
 
         # Apply softmax to use BERT Multi Class
-        logits = torch.softmax(outputs.get('logits').view(-1, len(self.model.splits)), dim = 1)
+        logits = torch.softmax(outputs.get('logits').view(-1, len(self.splits)), dim = 1)
 
         # Uncensored
         loss = torch.sum(torch.log(logits[e == 1][:, t[e == 1]] + 1e-10)) # Instanteneous risk
