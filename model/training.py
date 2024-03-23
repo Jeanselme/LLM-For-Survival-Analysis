@@ -10,10 +10,10 @@ class DeepHitTrainer(Trainer):
         super().__init__(model, args, data_collator = data_collator, train_dataset = train_dataset, eval_dataset = eval_dataset, tokenizer = tokenizer, model_init = model_init)
         (e, t) = train_dataset.labels
         self.max = t.max()
-        self.splits = torch.tensor(self.model.splits + [self.max]) # Add inifinty as the last bucket
+        self.splits = self.model.splits + [self.max] # Add inifinty as the last bucket
 
     def discretise(self, t):
-        return torch.bucketize(torch.clamp(t, 0, self.max), self.splits)
+        return torch.bucketize(torch.clamp(t, 0, self.max), torch.tensor(self.splits, device = t.device))
  
     def compute_loss(self, model, inputs, return_outputs = False):
         """
